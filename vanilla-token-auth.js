@@ -168,7 +168,8 @@ const configs = {
             wechat_official_account: '/auth/wechat_official_account',
         },
 
-        httpWrapper: fetch,
+        // Default to fetch, but don't assume it's available (e.g., when doing SSR)
+        httpWrapper: typeof window !== `undefined` ? fetch : undefined,
 
         broadcast(name, payload) {
             if (process.env.NODE_ENV === 'development') {
