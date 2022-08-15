@@ -4,7 +4,7 @@
     "main": "vanilla-token-auth.js",
     "license": "WTFPL",
     "dependencies": {
-        "js-cookie": "2.2.1",
-        "lodash": "4.17.21"
+        "js-cookie": "^2.2.1",
+        "lodash": "^4.17.21"
     }
 }
