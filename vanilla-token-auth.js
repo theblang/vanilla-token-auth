@@ -169,7 +169,7 @@ const configs = {
         },
 
         // Default to fetch, but don't assume it's available (e.g., in Jest or when doing SSR)
-        httpWrapper: window?.fetch != null ? window.fetch : undefined,
+        httpWrapper: typeof window !== 'undefined' && window.fetch != null ? window.fetch : undefined,
 
         broadcast(name, payload) {
             if (process.env.NODE_ENV === 'development') {
