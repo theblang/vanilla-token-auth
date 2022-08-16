@@ -1,6 +1,6 @@
 {
     "name": "vanilla-token-auth",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "main": "vanilla-token-auth.js",
     "license": "WTFPL",
     "dependencies": {
