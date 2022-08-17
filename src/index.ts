@@ -1,101 +1,185 @@
-import Cookies from 'js-cookie';
+import Cookies, { CookieAttributes } from 'js-cookie';
 import cloneDeep from 'lodash/fp/cloneDeep';
 import isObject from 'lodash/fp/isObject';
 
-/**
- * @typedef CustomOptions
- * @property {Object} [params] params
- * @property {string} [config] config name
- * @property {string} [auth_origin_url] the auth origin url
- */
+type CustomOptions = {
+    params?: Record<string, any>
+    config?: string
+    auth_origin_url?: string
+}
+
+type RejectOptions = {
+    reason: string
+    errors: string[]
+}
+
+type AuthHeaders = {
+    'access-token': string
+    'token-type': string
+    client: string
+    expiry: string
+    uid: string
+}
+
+type CustomStorage = {
+    persistData: (key: string, val: string) => void
+    retrieveData: (key: string) => void
+    deleteData: (key: string) => void
+}
+
+type Config = {
+    /**
+     * The base route to your api. Each of the following paths will be relative to this URL. Authentication headers will only be added to requests with this value as the base URL.
+     */
+    apiUrl: string
+    /**
+     * Relative path to sign user out. this will destroy the user's token both server-side and client-side.
+     */
+    signOutUrl: string
+    /**
+     * Path for signing in using email credentials.
+     */
+    emailSignInPath: string
+    /**
+     * Path for submitting new email registrations.
+     */
+    emailRegistrationPath: string
+    /**
+     * Path for submitting account update requests.
+     */
+    accountUpdatePath: string
+    /**
+     * Path for submitting account deletion requests.
+     */
+    accountDeletePath: string
+
+    /**
+     * The url to which the API should redirect after users visit the link contained in email-registration emails.
+     */
+    confirmationSuccessUrl: string | (() => string)
+    /**
+     * Path for requesting password reset emails.
+     */
+    passwordResetPath: string
+    /**
+     * Path for submitting new passwords for authenticated users.
+     */
+    passwordUpdatePath: string
+    /**
+     * The URL to which the API should redirect after users visit the links contained in password-reset emails.
+     */
+    passwordResetSuccessUrl: string | (() => string)
+    /**
+     * Relative path to validate authentication tokens.
+     */
+    tokenValidationPath: string
+    /**
+     * Older browsers have trouble with CORS. Pass a method here to determine whether or not a proxy should be used. Example: `function() { return !Modernizr.cors }`.
+     */
+    proxyIf: () => boolean
+    /**
+     * Proxy url if proxy is to be used
+     */
+    proxyUrl: string
+
+    /**
+     * Check if a user's auth token exists and is valid on page load.
+     */
+    validateOnPageLoad: boolean
+    /**
+     * Dictates the methodology of the OAuth login flow. One of: `sameWindow` (default), `newWindow`, or `inAppBrowser`.
+     */
+    omniauthWindowType: string
+    /**
+     * The method used to persist tokens between sessions. cookies are used by default, but `window.localStorage` and `window.sessionStorage` can be used as well. A custom object can also be used. Allowed strings are `cookies`, `localStorage`, and `sessionStorage`, otherwise an object implementing the following interface: `{ function persistData(key, val) {}, function retrieveData(key) {}, function deleteData(key) {} }`.
+     */
+    storage: string | CustomStorage
+
+    /**
+     * The transport used to send the auth token to the server. Either `cookies` (default) or `headers`.
+     */
+    transport: string
+    /**
+     * If this flag is set, the API's token validation will be called even if the auth token is not saved in `storage`. This can be useful for implementing a single sign-on (SSO) system.
+     */
+    forceValidateToken: boolean
+    /**
+     * A template for authentication tokens. The template will be provided with a context containing `token`, `clientId`, `expiry`, and `uid` params.
+     */
+    tokenFormat: AuthHeaders
+    /**
+     * Cookie options for js-cookie
+     */
+    cookieOps: CookieAttributes
+    /**
+     * A function that will open OmniAuth window by `url`.
+     */
+    createPopup: (url: string) => Window | null
+    /**
+     * A function that will return the token's expiry from the current headers. Returns `null` if no headers or expiry are found.
+     */
+    parseExpiry: (headers: AuthHeaders) => number | null
+
+    /**
+     * A function that will identify and return the current user's info (id, username, etc) in the response of a successful login request.
+     */
+    handleLoginResponse: (resp: HttpResponse['data']) => any
+    /**
+     * A function that will identify and return the current user's info (id, username, etc) in the response of a successful account update request.
+     */
+    handleAccountUpdateResponse: (resp: HttpResponse['data']) => any
+    /**
+     * A function that will identify and return the current user's info (id, username, etc) in the response of a successful token validation request.
+     */
+    handleTokenValidationResponse: (resp: HttpResponse['data']) => any
+
+    /**
+     * An object containing paths to auth endpoints. keys are names of the providers, values are their auth paths relative to the `apiUrl`.
+     */
+    authProviderPaths: Record<string, string>
+    /**
+     * A [`Fetch API`](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API) compatible function wrapper.
+     */
+    httpWrapper: typeof window.fetch | undefined
+    /**
+     * Callback to be used by AngularJS to broadcast events.
+     */
+    broadcast: (name: string, payload?: any) => void
+    /**
+     * Helper to navigate to pages programmatically.
+     */
+    navigate: (url: string, replace?: boolean) => void
+}
+
+type HttpResponse<TData = any> = {
+    /**
+     * The response body transformed with the transform functions
+     */
+    data: TData;
+    /**
+     * HTTP status code of the response.
+     */
+    status: number;
+};
 
 /**
- * @typedef RejectOptions
- * @property {string} reason reason
- * @property {string[]} errors errors
+ * Promise with `resolve` and `reject` methods of itself
  */
-
-/**
- * @typedef AuthHeaders
- * @property {string} `access-token` access-token
- * @property {string} `token-type` token-type
- * @property {string} client client
- * @property {string} expiry expiry
- * @property {string} uid uid
- */
-
-/**
- * @typedef ConfigAuthProviderPaths
- * @property {string} google_oauth2 Google OAuth2
- * @property {string} facebook Facebook
- * @property {string} apple_quantic Apple quantic
- * @property {string} apple_smartly Apple smartly
- * @property {string} twitter Twitter
- * @property {string} onelogin OneLogin
- * @property {string} wechat WeChat
- */
-
-/**
- * @typedef CustomStorage
- * @property {(key: string, val: string) => void} persistData persist data
- * @property {(key: string) => void} retrieveData retrieve data
- * @property {(key: string) => void} deleteData delete data
- */
-
-/**
- * @typedef Config
- * @property {string} apiUrl The base route to your api. Each of the following paths will be relative to this URL. Authentication headers will only be added to requests with this value as the base URL.
- * @property {string} signOutUrl Relative path to sign user out. this will destroy the user's token both server-side and client-side.
- * @property {string} emailSignInPath Path for signing in using email credentials.
- * @property {string} emailRegistrationPath Path for submitting new email registrations.
- * @property {string} accountUpdatePath Path for submitting account update requests.
- * @property {string} accountDeletePath Path for submitting account deletion requests.
- * @property {string|() => string} confirmationSuccessUrl The url to which the API should redirect after users visit the link contained in email-registration emails.
- * @property {string} passwordResetPath Path for requesting password reset emails.
- * @property {string} passwordUpdatePath Path for submitting new passwords for authenticated users.
- * @property {string|() => string} passwordResetSuccessUrl The URL to which the API should redirect after users visit the links contained in password-reset emails.
- * @property {string} tokenValidationPath Relative path to validate authentication tokens.
- * @property {() => boolean} proxyIf Older browsers have trouble with CORS. Pass a method here to determine whether or not a proxy should be used. Example: `function() { return !Modernizr.cors }`.
- * @property {string} proxyUrl Proxy url if proxy is to be used
- * @property {boolean} validateOnPageLoad Check if a user's auth token exists and is valid on page load.
- * @property {string} omniauthWindowType Dictates the methodology of the OAuth login flow. One of: `sameWindow` (default), `newWindow`, or `inAppBrowser`.
- * @property {string|CustomStorage} storage The method used to persist tokens between sessions. cookies are used by default, but `window.localStorage` and `window.sessionStorage` can be used as well. A custom object can also be used. Allowed strings are `cookies`, `localStorage`, and `sessionStorage`, otherwise an object implementing the following interface: `{ function persistData(key, val) {}, function retrieveData(key) {}, function deleteData(key) {} }`.
- * @property {string} transport The transport used to send the auth token to the server. Either `cookies` (default) or `headers`.
- * @property {boolean} forceValidateToken If this flag is set, the API's token validation will be called even if the auth token is not saved in `storage`. This can be useful for implementing a single sign-on (SSO) system.
- * @property {AuthHeaders} tokenFormat A template for authentication tokens. The template will be provided with a context containing `token`, `clientId`, `expiry`, and `uid` params.
- * @property {Cookies.CookieAttributes} cookieOps Cookie options for js-cookie
- * @property {(url: string) => Window|null} createPopup A function that will open OmniAuth window by `url`.
- * @property {(headers: object) => number|null} parseExpiry A function that will return the token's expiry from the current headers. Returns `null` if no headers or expiry are found.
- * @property {(resp: HttpResponse) => any} handleLoginResponse A function that will identify and return the current user's info (id, username, etc) in the response of a successful login request.
- * @property {(resp: HttpResponse) => any} handleAccountUpdateResponse A function that will identify and return the current user's info (id, username, etc) in the response of a successful account update request.
- * @property {(resp: HttpResponse) => any} handleTokenValidationResponse A function that will identify and return the current user's info (id, username, etc) in the response of a successful token validation request.
- * @property {ConfigAuthProviderPaths} authProviderPaths An object containing paths to auth endpoints. keys are names of the providers, values are their auth paths relative to the `apiUrl`.
- * @property {typeof fetch} httpWrapper A [`Fetch API`](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API) compatible function wrapper.
- * @property {(name: string, payload?: any) => void} broadcast Callback to be used by AngularJS to broadcast events.
- * @property {(url: string, replace?: boolean) => void} navigate Helper to navigate to pages programmatically.
- */
-
-/**
- * @typedef HttpResponse
- * @property {any} data The response body transformed with the transform functions
- * @property {number} status HTTP status code of the response.
- */
+interface DeferredPromise<T = any> {
+    resolve(value: T | PromiseLike<T>): void
+    reject(reason?: any): void
+    promise: Promise<T>
+}
 
 /**
  * Interpolate a string with the given data.
  * Simple version of https://code.angularjs.org/1.7.9/docs/api/ng/service/$interpolate
- * @param {string} str string to interpolate
- * @param {Object} ctx context with variables for interpolation
- * @returns {string}
  */
-function interpolate(str, ctx) {
+function interpolate(str: string, ctx: Record<string, any>) {
     return str.replace(/{{\s?([a-zA-Z]+)\s?}}/g, (match, key) => ctx[key] || match);
 }
 
-/**
- * @type {Record<string, Config>}
- */
-const configs = {
+const configs: Record<string, Config> = {
     default: {
         apiUrl: '/api',
         signOutUrl: '/auth/sign_out',
@@ -142,7 +226,7 @@ const configs = {
             return window.open(url, '_blank', 'closebuttoncaption=Cancel');
         },
 
-        parseExpiry(headers) {
+        parseExpiry(headers: AuthHeaders) {
             // convert from ruby time (seconds) to js time (milliseconds)
             return parseInt(headers.expiry, 10) * 1000 || null;
         },
@@ -191,16 +275,15 @@ let defaultConfigName = 'default';
 export default class DeviseTokenAuthClient {
     /**
      * Configure DeviseTokenAuthClient with the given options.
-     * @param {Partial<Config>|Array<Record<string, Partial<Config>>>} params options
      */
-    constructor(params) {
+    constructor(params: Partial<Config> | Array<Record<string, Partial<Config>>>) {
         // user is using multiple concurrent configs (>1 user types).
         if (params instanceof Array && params.length) {
             // extend each item in array from default settings
             for (let i = 0; i < params.length; i++) {
                 // get the name of the config
                 const conf = params[i];
-                let label = null;
+                let label = '';
                 // eslint-disable-next-line no-restricted-syntax,guard-for-in
                 for (const k in conf) {
                     label = k;
@@ -214,7 +297,7 @@ export default class DeviseTokenAuthClient {
                 // use copy preserve the original default settings object while
                 // extending each config object
                 const defaults = cloneDeep(configs.default);
-                const fullConfig = {};
+                const fullConfig = {} as any;
                 fullConfig[label] = Object.assign(defaults, conf[label]);
                 Object.assign(configs, fullConfig);
             }
@@ -234,52 +317,50 @@ export default class DeviseTokenAuthClient {
 
     /**
      * Deferred object
-     * @type {{ resolve: Function, reject: Function, promise: Promise }|null}
      */
-    dfd = null;
+    dfd: DeferredPromise | null = null;
 
     /**
      * User data object
-     * @type {Object}
      */
-    user = {};
+    user: Record<string, any> = {};
 
     /**
      * Auth headers object
-     * @type {Partial<AuthHeaders>}
      */
-    headers = {};
+    headers: Partial<AuthHeaders> = {};
 
     mustResetPassword = false;
     firstTimeLogin = false;
     oauthRegistration = false;
+    
+    timer: number | null = null;
+    _hasSessionStorage: boolean | null = null;
+    _hasLocalStorage: boolean | null = null;
 
     /**
      * Window message listener
-     * @type {Function|null}
      */
-    listener = null;
+    listener: ((...args: any[]) => void) | null = null;
 
     /**
      * Timer for auth window message listener
-     * @type {number|null}
      */
-    requestCredentialsPollingTimer = null;
+    requestCredentialsPollingTimer: number|null = null;
 
     /**
      * Cleanup auth window message listeners
-     * @type {Function|null}
      */
-    cancelOmniauthInAppBrowserListeners = null;
+    cancelOmniauthInAppBrowserListeners: Function|null = null;
 
     /**
      * Wrapper for fetch.
-     * @param {RequestInfo} input
-     * @param {RequestInit} [init]
-     * @returns {Promise<HttpResponse>}
      */
-    http(input, init) {
+    http<TData>(input: RequestInfo | URL, init?: RequestInit): Promise<HttpResponse<TData>> {
         const httpWrapper = this.getConfig().httpWrapper;
+        if (!httpWrapper) {
+            throw new Error('No httpWrapper configured');
+        }
         return httpWrapper(input, init).then(res =>
             res.json().then(data => {
                 const response = { data, status: res.status };
@@ -316,9 +397,8 @@ export default class DeviseTokenAuthClient {
 
     /**
      * Cancel any existing timers, listeners, and promises
-     * @param {RejectOptions} [reason] Reason for cancelling
      */
-    cancel(reason) {
+    cancel(reason?: RejectOptions) {
         // cancel any pending timers
         if (this.requestCredentialsPollingTimer != null) {
             window.clearTimeout(this.requestCredentialsPollingTimer);
@@ -347,15 +427,15 @@ export default class DeviseTokenAuthClient {
         this.cancel();
 
         if (window.removeEventListener) {
+            // @ts-ignore
             window.removeEventListener('message', this.listener, false);
         }
     }
 
     /**
      * Handle the broadcast events from external auth tabs/popups
-     * @param {MessageEvent<any>} ev Broadcast event
      */
-    handlePostMessage(ev) {
+    handlePostMessage(ev: MessageEvent<any>) {
         const config = this.getConfig();
         if (ev.data.message === 'deliverCredentials') {
             delete ev.data.message;
@@ -381,13 +461,10 @@ export default class DeviseTokenAuthClient {
     /**
      * Register by email. Server will send confirmation email containing
      * a link to activate the account. The link will redirect to this site.
-     * @param {*} params registration parameters
-     * @param {CustomOptions} opts options
-     * @returns {Promise<HttpResponse>}
      */
-    submitRegistration(params, opts = {}) {
+    submitRegistration<TData>(params: Record<string, any>, opts: CustomOptions = {}) {
         const config = this.getConfig(opts.config);
-        return this.http(this.apiUrl(opts.config) + config.emailRegistrationPath, {
+        return this.http<TData>(this.apiUrl(opts.config) + config.emailRegistrationPath, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -411,12 +488,9 @@ export default class DeviseTokenAuthClient {
 
     /**
      * Capture input from user, authenticate server-side
-     * @param {*} params login parameters
-     * @param {CustomOptions} opts options
-     * @returns {Promise<HttpResponse>}
      */
-    submitLogin(params, opts = {}) {
-        this.initDfd();
+    submitLogin<TData>(params: Record<string, any>, opts: CustomOptions = {}) {
+        const promise = this.initDfd<TData>();
         const config = this.getConfig(opts.config);
         this.http(this.apiUrl(opts.config) + config.emailSignInPath, {
             method: 'POST',
@@ -439,32 +513,28 @@ export default class DeviseTokenAuthClient {
                 config.broadcast('auth:login-error', resp.data);
             },
         );
-        return this.dfd.promise;
+        return promise;
     }
 
     /**
      * Check if user is authenticated.
      * This uses the stored auth headers to check if the user is authenticated.
-     * @returns {boolean}
      */
-    userIsAuthenticated() {
+    userIsAuthenticated(): boolean {
         return this.retrieveData('auth_headers') && this.user.signedIn && !this.tokenHasExpired();
     }
 
     /**
      * Request password reset from API
-     * @param {*} params password reset parameters
-     * @param {CustomOptions} opts options
-     * @returns {Promise<HttpResponse>}
      */
-    requestPasswordReset(params, opts = {}) {
+    requestPasswordReset<TData>(params: Record<string, any>, opts: CustomOptions = {}) {
         const config = this.getConfig(opts.config);
         params.redirect_url = this.getResultOrValue(config.passwordResetSuccessUrl);
         if (opts.config != null) {
             params.config_name = opts.config;
         }
 
-        return this.http(this.apiUrl(opts.config) + config.passwordResetPath, {
+        return this.http<TData>(this.apiUrl(opts.config) + config.passwordResetPath, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -484,13 +554,10 @@ export default class DeviseTokenAuthClient {
 
     /**
      * Update user password
-     * @param {*} params password update parameters
-     * @param {CustomOptions} opts options
-     * @returns {Promise<HttpResponse>}
      */
-    updatePassword(params, opts = {}) {
+    updatePassword<TData>(params: any, opts: CustomOptions = {}) {
         const config = this.getConfig(opts.config);
-        return this.http(this.apiUrl(opts.config) + config.passwordUpdatePath, {
+        return this.http<TData>(this.apiUrl(opts.config) + config.passwordUpdatePath, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -511,13 +578,10 @@ export default class DeviseTokenAuthClient {
 
     /**
      * Update user account info
-     * @param {*} params account update parameters
-     * @param {CustomOptions} opts options
-     * @returns {Promise<HttpResponse>}
      */
-    updateAccount(params, opts = {}) {
+    updateAccount<TData>(params: any, opts: CustomOptions = {}) {
         const config = this.getConfig(opts.config);
-        return this.http(this.apiUrl(opts.config) + config.accountUpdatePath, {
+        return this.http<TData>(this.apiUrl(opts.config) + config.accountUpdatePath, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -533,7 +597,7 @@ export default class DeviseTokenAuthClient {
                 // ensure any critical headers (uid + ?) that are returned in
                 // the update response are updated appropriately in storage
                 if (curHeaders) {
-                    const newHeaders = {};
+                    const newHeaders: Record<string, string> = {};
                     const ctx = {
                         token: this.user.auth_token,
                         clientId: this.user.client_id,
@@ -543,7 +607,7 @@ export default class DeviseTokenAuthClient {
                     Object.entries(config.tokenFormat).forEach(([key, value]) => {
                         newHeaders[key] = interpolate(value, ctx);
                     });
-                    this.setAuthHeaders(newHeaders);
+                    this.setAuthHeaders(newHeaders as AuthHeaders);
                 }
                 config.broadcast('auth:account-update-success', resp.data);
 
@@ -558,13 +622,10 @@ export default class DeviseTokenAuthClient {
 
     /**
      * Permanently destroy a user's account.
-     * @param {*} params account destroy parameters
-     * @param {CustomOptions} opts options
-     * @returns {Promise<HttpResponse>}
      */
-    destroyAccount(params, opts = {}) {
+    destroyAccount<TData>(params: any, opts: CustomOptions = {}) {
         const config = this.getConfig(opts.config);
-        return this.http(this.apiUrl(opts.config) + config.accountUpdatePath, {
+        return this.http<TData>(this.apiUrl(opts.config) + config.accountUpdatePath, {
             method: 'DELETE',
             headers: {
                 'Content-Type': 'application/json',
@@ -586,15 +647,13 @@ export default class DeviseTokenAuthClient {
     /**
      * Open external auth provider in separate window, send requests for
      * credentials until api auth callback page responds.
-     * @param {*} provider external auth provider
-     * @param {CustomOptions} opts options
-     * @returns {Promise<any>}
      */
-    authenticate(provider, opts = {}) {
+    authenticate(provider: string, opts: CustomOptions = {}) {
         if (this.dfd == null) {
             this.setConfigName(opts.config);
-            this.initDfd();
+            const promise = this.initDfd();
             this.openAuthWindow(provider, opts);
+            return promise;
         }
 
         return this.dfd.promise;
@@ -603,7 +662,7 @@ export default class DeviseTokenAuthClient {
     /**
      * Set the current config name
      */
-    setConfigName(configName) {
+    setConfigName(configName?: string) {
         if (configName == null) {
             configName = defaultConfigName;
         }
@@ -612,18 +671,15 @@ export default class DeviseTokenAuthClient {
 
     /**
      * Open external window to authentication provider
-     * @param {string} provider external auth provider
-     * @param {CustomOptions} [opts] options
-     * @returns {*}
      */
-    openAuthWindow(provider, opts = {}) {
+    openAuthWindow(provider: string, opts: CustomOptions = {}) {
         const { omniauthWindowType, createPopup } = this.getConfig(opts.config);
         const authUrl = this.buildAuthUrl(omniauthWindowType, provider, opts);
 
         if (omniauthWindowType === 'newWindow') {
-            this.requestCredentialsViaPostMessage(createPopup(authUrl));
+            this.requestCredentialsViaPostMessage(createPopup(authUrl) as Window);
         } else if (omniauthWindowType === 'inAppBrowser') {
-            this.requestCredentialsViaExecuteScript(createPopup(authUrl));
+            this.requestCredentialsViaExecuteScript(createPopup(authUrl) as Window);
         } else if (omniauthWindowType === 'sameWindow') {
             this.visitUrl(authUrl);
         } else {
@@ -633,22 +689,16 @@ export default class DeviseTokenAuthClient {
 
     /**
      * Testing actual redirects is difficult. Stub this for testing
-     * @param {string} url url to visit
-     * @returns
      */
     // eslint-disable-next-line class-methods-use-this
-    visitUrl(url) {
+    visitUrl(url: string) {
         return this.getConfig().navigate(url, true);
     }
 
     /**
      * Build url for authentication provider
-     * @param {string} omniauthWindowType omniauthWindowType
-     * @param {string} provider external auth provider
-     * @param {CustomOptions} opts options
-     * @returns {string}
      */
-    buildAuthUrl(omniauthWindowType, provider, opts = {}) {
+    buildAuthUrl(omniauthWindowType: string, provider: string, opts: CustomOptions = {}) {
         const { apiUrl, authProviderPaths } = this.getConfig(opts.config);
         const authUrl = new URL(apiUrl + authProviderPaths[provider]);
 
@@ -669,10 +719,8 @@ export default class DeviseTokenAuthClient {
      * 1. user completes authentication
      * 2. user fails authentication
      * 3. auth window is closed
-     * @param {Window} authWindow auth window
-     * @returns {*}
      */
-    requestCredentialsViaPostMessage(authWindow) {
+    requestCredentialsViaPostMessage(authWindow: Window) {
         // user has closed the external provider's auth window without completing login.
         if (authWindow.closed) {
             return this.handleAuthWindowClose();
@@ -692,11 +740,9 @@ export default class DeviseTokenAuthClient {
      * 1. user completes authentication
      * 2. user fails authentication
      * 3. inAppBrowser auth window is closed
-     * @param {Window} authWindow auth window
-     * @returns {*}
      */
-    requestCredentialsViaExecuteScript(authWindow) {
-        this.cancelOmniauthInAppBrowserListeners();
+    requestCredentialsViaExecuteScript(authWindow: Window) {
+        this.cancelOmniauthInAppBrowserListeners?.();
         const handleAuthWindowClose = this.handleAuthWindowClose.bind(this);
         const handleLoadStop = this.handleLoadStop.bind(this, authWindow);
         const handlePostMessage = this.handlePostMessage.bind(this);
@@ -715,10 +761,8 @@ export default class DeviseTokenAuthClient {
 
     /**
      * Responds to inAppBrowser window loads
-     * @param {Window} authWindow auth window
-     * @returns {*}
      */
-    handleLoadStop(authWindow) {
+    handleLoadStop(authWindow: Window) {
         const _this = this;
 
         // favor InAppBrowser postMessage API if available, otherwise revert to returning directly via
@@ -737,7 +781,8 @@ return data; \
 performBestTransit();`;
 
         // eslint-disable-next-line consistent-return
-        return authWindow.executeScript({ code: remoteCode }, response => {
+        // @ts-ignore
+        return authWindow.executeScript({ code: remoteCode }, (response: any) => {
             const data = response[0];
             if (data === 'postMessageSuccess') {
                 // the standard issue postHandler will take care of the rest
@@ -745,8 +790,9 @@ performBestTransit();`;
             }
             if (data) {
                 const ev = new Event('message');
+                // @ts-ignore
                 ev.data = data;
-                _this.cancelOmniauthInAppBrowserListeners();
+                _this.cancelOmniauthInAppBrowserListeners?.();
                 window.dispatchEvent(ev);
                 _this.initDfd();
                 return authWindow.close();
@@ -762,7 +808,7 @@ performBestTransit();`;
             reason: 'unauthorized',
             errors: ['User canceled login'],
         });
-        this.cancelOmniauthInAppBrowserListeners();
+        this.cancelOmniauthInAppBrowserListeners?.();
         this.getConfig().broadcast('auth:window-closed');
     }
 
@@ -780,19 +826,16 @@ performBestTransit();`;
         return new Promise(resolve => {
             window.setTimeout(() => {
                 this.dfd = null;
-                resolve();
+                resolve(null);
             });
         });
     }
 
     /**
      * Generates query string based on simple or complex object graphs
-     * @param {Object} params object to be converted to query string
-     * @param {string} [prefix] prefix to be added to query string
-     * @returns {string}
      */
-    buildQueryString(params, prefix) {
-        const str = [];
+    buildQueryString(params: Record<string, string>, prefix?: string) {
+        const str: string[] = [];
         Object.entries(params).forEach(([key, val]) => {
             const k = prefix ? `${prefix}[${key}]` : key;
             const encoded = isObject(val) ? this.buildQueryString(val, k) : `${k}=${encodeURIComponent(val)}`;
@@ -803,13 +846,11 @@ performBestTransit();`;
 
     /**
      * Parses raw query string parameters
-     * @param {string} querystring raw querystring starting with ?
-     * @returns {Object}
      */
     // eslint-disable-next-line class-methods-use-this
-    parseQueryString(searchString) {
+    parseQueryString(searchString: string) {
         const queryString = searchString.substring(1);
-        const params = {};
+        const params: Record<string, string> = {};
         if (queryString) {
             const pairs = queryString.split('&');
             pairs.forEach(pair => {
@@ -826,14 +867,12 @@ performBestTransit();`;
     /**
      * This is something that can be returned from 'resolve' methods
      * of pages that have restricted access
-     * @param {CustomOptions} [opts] options
-     * @returns {Promise<any>}
      */
-    validateUser(opts = {}) {
+    validateUser(opts: CustomOptions = {}) {
         let configName = opts.config;
 
         if (this.dfd == null) {
-            this.initDfd();
+            const promise = this.initDfd();
 
             // save trip to API if possible. assume that user is still signed
             // in if auth headers are present and token has not expired.
@@ -859,12 +898,18 @@ performBestTransit();`;
                     this.setConfigName(configName);
 
                     // check if redirected from password reset link
+                    // TODO: check this boolean
+                    // @ts-ignore
                     this.mustResetPassword = params.reset_password;
-
+                    
                     // check if redirected from email confirmation link
+                    // TODO: check this boolean
+                    // @ts-ignore
                     this.firstTimeLogin = params.account_confirmation_success;
-
+                    
                     // check if redirected from auth registration
+                    // TODO: check this boolean
+                    // @ts-ignore
                     this.oauthRegistration = params.oauth_registration;
 
                     // persist these values
@@ -931,6 +976,7 @@ performBestTransit();`;
                     this.getConfig(configName).broadcast('auth:invalid');
                 }
             }
+            return promise;
         }
 
         return this.dfd.promise;
@@ -938,13 +984,11 @@ performBestTransit();`;
 
     /**
      * Confirm that user's auth token is still valid.
-     * @param {CustomOptions} [opts] options
-     * @returns {Promise<HttpResponse>}
      */
-    validateToken(opts = {}) {
+    validateToken<TData>(opts: CustomOptions = {}) {
         if (!this.tokenHasExpired()) {
             const config = this.getConfig(opts.config);
-            return this.http(this.apiUrl(opts.config) + config.tokenValidationPath).then(
+            return this.http<TData>(this.apiUrl(opts.config) + config.tokenValidationPath).then(
                 resp => {
                     const authData = config.handleTokenValidationResponse(resp.data);
                     this.handleValidAuth(authData);
@@ -997,18 +1041,16 @@ performBestTransit();`;
 
     /**
      * Ensure token has not expired
-     * @returns {boolean}
      */
     tokenHasExpired() {
         const expiry = this.getExpiry();
         const now = new Date().getTime();
 
-        return expiry && expiry < now;
+        return expiry !== null && expiry < now;
     }
 
     /**
      * Get expiry by method provided in config
-     * @returns {number|null}
      */
     getExpiry() {
         return this.getConfig().parseExpiry(this.retrieveData('auth_headers') || {});
@@ -1020,7 +1062,6 @@ performBestTransit();`;
      * 1. login failure
      * 2. token validation failure
      * 3. user logs out
-     * @returns {*}
      */
     invalidateTokens() {
         // cannot delete user object for scoping reasons. instead, delete
@@ -1045,12 +1086,10 @@ performBestTransit();`;
 
     /**
      * Destroy auth token on server, destroy user auth credentials
-     * @param {CustomOptions} [opts] options
-     * @returns {Promise<HttpResponse>}
      */
-    signOut(opts = {}) {
+    signOut<TData>(opts: CustomOptions = {}) {
         const config = this.getConfig(opts.config);
-        return this.http(this.apiUrl(opts.config) + config.signOutUrl, { method: 'DELETE' }).then(
+        return this.http<TData>(this.apiUrl(opts.config) + config.signOutUrl, { method: 'DELETE' }).then(
             resp => {
                 this.invalidateTokens();
                 config.broadcast('auth:logout-success');
@@ -1066,11 +1105,8 @@ performBestTransit();`;
 
     /**
      * Handle successful authentication
-     * @param {Object} user user object
-     * @param {boolean} [setHeaders] set auth header
-     * @returns {Promise<any>}
      */
-    handleValidAuth(user, setHeaders) {
+    handleValidAuth(user: Record<string, any>, setHeaders = false) {
         // cancel any pending postMessage checks
         if (setHeaders == null) {
             setHeaders = false;
@@ -1080,7 +1116,7 @@ performBestTransit();`;
         }
 
         // cancel any inAppBrowser listeners
-        this.cancelOmniauthInAppBrowserListeners();
+        this.cancelOmniauthInAppBrowserListeners?.();
 
         // must extend existing object for scoping reasons
         Object.assign(this.user, user);
@@ -1107,29 +1143,22 @@ performBestTransit();`;
 
     /**
      * Configure auth token format
-     * @param {Object} ctx context
-     * @param {CustomOptions} [opts] options
-     * @returns {Object}
      */
-    buildAuthHeaders(ctx, opts = {}) {
-        const headers = {};
+    buildAuthHeaders(ctx: Record<string, string>, opts: CustomOptions = {}) {
+        const headers: Record<string, string> = {};
 
         const tokenFormat = this.getConfig(opts.config).tokenFormat;
         Object.entries(tokenFormat).forEach(([key, val]) => {
             headers[key] = interpolate(val, ctx);
         });
 
-        return headers;
+        return headers as AuthHeaders;
     }
 
     /**
      * Abstract persistent data store
-     * @param {string} key key
-     * @param {string} val value
-     * @param {string} [configName] config name
-     * @returns {*}
      */
-    persistData(key, val, configName) {
+    persistData(key: string, val: any, configName?: string) {
         const { storage, transport, cookieOps } = this.getConfig(configName);
 
         if (transport === 'cookies') {
@@ -1152,10 +1181,8 @@ performBestTransit();`;
 
     /**
      * Abstract persistent data retrieval
-     * @param {string} key key
-     * @returns {*}
      */
-    retrieveData(key) {
+    retrieveData(key: string) {
         const { storage, transport } = this.getConfig();
 
         if (transport === 'cookies') {
@@ -1168,11 +1195,11 @@ performBestTransit();`;
             }
             switch (storage) {
                 case 'localStorage':
-                    return JSON.parse(window.localStorage.getItem(key));
+                    return JSON.parse(window.localStorage.getItem(key) || 'null');
                 case 'sessionStorage':
-                    return JSON.parse(window.sessionStorage.getItem(key));
+                    return JSON.parse(window.sessionStorage.getItem(key) || 'null');
                 default:
-                    return Cookies.getJSON(key);
+                    return JSON.parse(Cookies.get(key) || 'null');
             }
         } catch (e) {
             // gracefully handle if JSON parsing
@@ -1185,10 +1212,8 @@ performBestTransit();`;
 
     /**
      * Abstract persistent data removal
-     * @param {string} key key
-     * @returns {*}
      */
-    deleteData(key) {
+    deleteData(key: string) {
         const { storage, transport, cookieOps } = this.getConfig();
 
         if (transport === 'cookies') {
@@ -1205,7 +1230,7 @@ performBestTransit();`;
             case 'sessionStorage':
                 return window.sessionStorage.removeItem(key);
             default: {
-                const options = { path: cookieOps.path };
+                const options: Record<string, any> = { path: cookieOps.path };
 
                 if (cookieOps.domain !== undefined) {
                     options.domain = cookieOps.domain;
@@ -1218,9 +1243,8 @@ performBestTransit();`;
 
     /**
      * Persist authentication token, client id, expiry, uid
-     * @param {AuthHeaders} headers auth headers
      */
-    setAuthHeaders(headers) {
+    setAuthHeaders(headers: AuthHeaders) {
         const newHeaders = {
             ...(this.retrieveData('auth_headers') || {}),
             ...headers,
@@ -1230,14 +1254,14 @@ performBestTransit();`;
         const expiry = this.getExpiry();
         const now = new Date().getTime();
 
-        if (expiry > now) {
+        if (expiry && expiry > now) {
             if (this.timer != null) {
                 window.clearInterval(this.timer);
             }
 
             this.timer = window.setInterval(
                 () => this.validateUser({ config: this.getSavedConfig() }),
-                parseInt(expiry - now, 10),
+                expiry - now,
             );
         }
     }
@@ -1245,24 +1269,25 @@ performBestTransit();`;
     /**
      * Init a ES6 style promise deferred object
      */
-    initDfd() {
-        this.dfd = {};
-        const promise = new Promise((resolve, reject) => {
-            this.dfd.resolve = resolve;
-            this.dfd.reject = reject;
+    initDfd<TData>() {
+        let resolve: any, reject: any
+        const promise = new Promise<TData>((_resolve, _reject) => {
+            resolve = _resolve
+            reject = _reject
         });
-        this.dfd.promise = promise;
-        return this.dfd.promise;
+        this.dfd = {
+            promise,
+            resolve,
+            reject,
+        };
+        return this.dfd.promise as Promise<TData>;
     }
 
     /**
      * Failed login => invalidate auth header and reject promise.
      * deferred object must be destroyed after reflow.
-     * @param {{ reason: string; errors: string[] }} reason reason
-     * @param {boolean} [invalidateTokens] invalidate tokens
-     * @returns {*}
      */
-    rejectDfd(reason, invalidateTokens = true) {
+    rejectDfd(reason?: RejectOptions, invalidateTokens = true) {
         if (invalidateTokens) {
             this.invalidateTokens();
         }
@@ -1274,7 +1299,7 @@ performBestTransit();`;
             return new Promise(resolve => {
                 window.setTimeout(() => {
                     this.dfd = null;
-                    resolve();
+                    resolve(null);
                 });
             });
         }
@@ -1284,10 +1309,8 @@ performBestTransit();`;
 
     /**
      * Use proxy for IE
-     * @param {string} [configName] config name
-     * @returns {string}
      */
-    apiUrl(configName) {
+    apiUrl(configName?: string) {
         const config = this.getConfig(configName);
         if (config.proxyIf()) {
             return config.proxyUrl;
@@ -1297,20 +1320,16 @@ performBestTransit();`;
 
     /**
      * Get config
-     * @param {string} [name] config name
-     * @returns {Config}
      */
-    getConfig(name) {
+    getConfig(name?: string) {
         return configs[this.getCurrentConfigName(name)];
     }
 
     /**
      * If value is a method, call the method. otherwise return the argument itself
-     * @param {*} arg argument
-     * @returns {*}
      */
     // eslint-disable-next-line class-methods-use-this
-    getResultOrValue(arg) {
+    getResultOrValue(arg: any) {
         if (typeof arg === 'function') {
             return arg();
         }
@@ -1322,10 +1341,8 @@ performBestTransit();`;
      * 1. matches arg
      * 2. saved from past authentication
      * 3. first available config name
-     * @param {string} [name] config name
-     * @returns {string}
      */
-    getCurrentConfigName(name) {
+    getCurrentConfigName(name? : string) {
         return name || this.getSavedConfig();
     }
 
@@ -1338,18 +1355,17 @@ performBestTransit();`;
      * 2. sessionStorage
      * 3. cookies
      * 4. default (first available config)
-     * @returns {string}
      */
     getSavedConfig() {
-        let c = null;
+        let c: string | null = null;
         const key = 'currentConfigName';
 
         if (this.hasLocalStorage() && c == null) {
-            c = JSON.parse(window.localStorage.getItem(key));
+            c = JSON.parse(window.localStorage.getItem(key) || 'null');
         } else if (this.hasSessionStorage() && c == null) {
-            c = JSON.parse(window.sessionStorage.getItem(key));
+            c = JSON.parse(window.sessionStorage.getItem(key) || 'null');
         } else if (c == null) {
-            c = Cookies.get(key);
+            c = Cookies.get(key) || 'null';
         }
 
         return c || defaultConfigName;
@@ -1357,7 +1373,6 @@ performBestTransit();`;
 
     /**
      * Has SessionStorage available
-     * @returns {boolean}
      */
     hasSessionStorage() {
         if (this._hasSessionStorage == null) {
@@ -1378,7 +1393,6 @@ performBestTransit();`;
 
     /**
      * Has LocalStorage available
-     * @returns {boolean}
      */
     hasLocalStorage() {
         if (this._hasLocalStorage == null) {
