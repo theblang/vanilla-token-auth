@@ -1,6 +1,4 @@
 import Cookies, { CookieAttributes } from 'js-cookie';
-import cloneDeep from 'lodash/fp/cloneDeep';
-import isObject from 'lodash/fp/isObject';
 
 type CustomOptions = {
     params?: Record<string, any>
@@ -179,6 +177,14 @@ function interpolate(str: string, ctx: Record<string, any>) {
     return str.replace(/{{\s?([a-zA-Z]+)\s?}}/g, (match, key) => ctx[key] || match);
 }
 
+/**
+ * Based on https://github.com/lodash/lodash/blob/2da024c3b4f9947a48517639de7560457cd4ec6c/isObject.js
+ */
+function isObject(value: unknown) {
+    const type = typeof value
+    return value != null && (type === 'object' || type === 'function')
+}
+
 const configs: Record<string, Config> = {
     default: {
         apiUrl: '/api',
@@ -279,33 +285,34 @@ export default class DeviseTokenAuthClient {
     constructor(params: Partial<Config> | Array<Record<string, Partial<Config>>>) {
         // user is using multiple concurrent configs (>1 user types).
         if (params instanceof Array && params.length) {
-            // extend each item in array from default settings
-            for (let i = 0; i < params.length; i++) {
-                // get the name of the config
-                const conf = params[i];
-                let label = '';
-                // eslint-disable-next-line no-restricted-syntax,guard-for-in
-                for (const k in conf) {
-                    label = k;
+            throw new Error('DeviceTokenAuthClient config as an Array is not supported.\nWe need to migrate cloneDeep from lodash/fp/cloneDeepDeep first.');
+            // // extend each item in array from default settings
+            // for (let i = 0; i < params.length; i++) {
+            //     // get the name of the config
+            //     const conf = params[i];
+            //     let label = '';
+            //     // eslint-disable-next-line no-restricted-syntax,guard-for-in
+            //     for (const k in conf) {
+            //         label = k;
 
-                    // set the first item in array as default config
-                    if (i === 0) {
-                        defaultConfigName = label;
-                    }
-                }
+            //         // set the first item in array as default config
+            //         if (i === 0) {
+            //             defaultConfigName = label;
+            //         }
+            //     }
 
-                // use copy preserve the original default settings object while
-                // extending each config object
-                const defaults = cloneDeep(configs.default);
-                const fullConfig = {} as any;
-                fullConfig[label] = Object.assign(defaults, conf[label]);
-                Object.assign(configs, fullConfig);
-            }
+            //     // use copy preserve the original default settings object while
+            //     // extending each config object
+            //     const defaults = cloneDeep(configs.default);
+            //     const fullConfig = {} as any;
+            //     fullConfig[label] = Object.assign(defaults, conf[label]);
+            //     Object.assign(configs, fullConfig);
+            // }
 
-            // remove existing default config
-            if (defaultConfigName !== 'default') {
-                delete configs.default;
-            }
+            // // remove existing default config
+            // if (defaultConfigName !== 'default') {
+            //     delete configs.default;
+            // }
         } else if (params instanceof Object) {
             // user is extending the single default config
             Object.assign(configs.default, params);
@@ -834,7 +841,7 @@ performBestTransit();`;
     /**
      * Generates query string based on simple or complex object graphs
      */
-    buildQueryString(params: Record<string, string>, prefix?: string) {
+    buildQueryString(params: Record<string, any>, prefix?: string) {
         const str: string[] = [];
         Object.entries(params).forEach(([key, val]) => {
             const k = prefix ? `${prefix}[${key}]` : key;
