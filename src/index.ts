@@ -285,7 +285,7 @@ export default class DeviseTokenAuthClient {
     constructor(params: Partial<Config> | Array<Record<string, Partial<Config>>>) {
         // user is using multiple concurrent configs (>1 user types).
         if (params instanceof Array && params.length) {
-            throw new Error('DeviceTokenAuthClient config as an Array is not supported.\nWe need to migrate cloneDeep from lodash/fp/cloneDeepDeep first.');
+            throw new Error('DeviceTokenAuthClient config as an Array is not supported.\nWe need to migrate cloneDeep from lodash/fp/cloneDeep first.');
             // // extend each item in array from default settings
             // for (let i = 0; i < params.length; i++) {
             //     // get the name of the config
