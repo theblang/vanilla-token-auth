@@ -340,7 +340,7 @@ export default class DeviseTokenAuthClient {
     mustResetPassword = false;
     firstTimeLogin = false;
     oauthRegistration = false;
-    
+
     timer: number | null = null;
     _hasSessionStorage: boolean | null = null;
     _hasLocalStorage: boolean | null = null;
@@ -908,12 +908,12 @@ performBestTransit();`;
                     // TODO: check this boolean
                     // @ts-ignore
                     this.mustResetPassword = params.reset_password;
-                    
+
                     // check if redirected from email confirmation link
                     // TODO: check this boolean
                     // @ts-ignore
                     this.firstTimeLogin = params.account_confirmation_success;
-                    
+
                     // check if redirected from auth registration
                     // TODO: check this boolean
                     // @ts-ignore
