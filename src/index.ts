@@ -488,7 +488,7 @@ export default class DeviseTokenAuthClient {
             },
             resp => {
                 config.broadcast('auth:registration-email-error', resp.data);
-                return Promise.reject(resp);
+                throw resp;
             },
         );
     }
@@ -554,7 +554,7 @@ export default class DeviseTokenAuthClient {
             },
             resp => {
                 config.broadcast('auth:password-reset-request-error', resp.data);
-                return resp;
+                throw resp;
             },
         );
     }
@@ -578,7 +578,7 @@ export default class DeviseTokenAuthClient {
             },
             resp => {
                 config.broadcast('auth:password-change-error', resp.data);
-                return resp;
+                throw resp;
             },
         );
     }
@@ -605,24 +605,19 @@ export default class DeviseTokenAuthClient {
                 // the update response are updated appropriately in storage
                 if (curHeaders) {
                     const newHeaders: Record<string, string> = {};
-                    const ctx = {
-                        token: this.user.auth_token,
-                        clientId: this.user.client_id,
-                        uid: this.user.uid,
-                        expiry: this.user.expiry,
-                    };
-                    Object.entries(config.tokenFormat).forEach(([key, value]) => {
-                        newHeaders[key] = interpolate(value, ctx);
+                    Object.entries(config.tokenFormat).forEach(([key]) => {
+                        if (curHeaders[key] && updateResponse[key]) {
+                            newHeaders[key] = updateResponse[key];
+                        }
                     });
                     this.setAuthHeaders(newHeaders as AuthHeaders);
                 }
                 config.broadcast('auth:account-update-success', resp.data);
-
                 return resp;
             },
             resp => {
                 config.broadcast('auth:account-update-error', resp.data);
-                return resp;
+                throw resp;
             },
         );
     }
@@ -646,7 +641,7 @@ export default class DeviseTokenAuthClient {
             },
             resp => {
                 config.broadcast('auth:account-destroy-error', resp.data);
-                return resp;
+                throw resp;
             },
         );
     }
@@ -892,7 +887,7 @@ performBestTransit();`;
                 const params = this.parseQueryString(window.location.search);
 
                 // auth_token matches what is sent with postMessage, but supporting token for
-                // backwards compatability
+                // backwards compatibility
                 const token = params.auth_token || params.token;
 
                 if (token !== undefined) {
@@ -1030,12 +1025,14 @@ performBestTransit();`;
                     config.broadcast('auth:validation-error', resp.data);
 
                     // No data is no response, no response is no connection. Token cannot be destroyed if no connection
+                    const invalidateTokens = resp.status > 0;
+
                     return this.rejectDfd(
                         {
                             reason: 'unauthorized',
                             errors: resp.data ? resp.data.errors : ['Unspecified error'],
                         },
-                        true,
+                        invalidateTokens,
                     );
                 },
             );
@@ -1105,7 +1102,7 @@ performBestTransit();`;
             resp => {
                 this.invalidateTokens();
                 config.broadcast('auth:logout-error', resp.data);
-                return resp;
+                throw resp;
             },
         );
     }
