@@ -254,7 +254,9 @@ const configs: Record<string, Config> = {
             apple_smartly: '/auth/apple_smartly',
             twitter: '/auth/twitter',
             onelogin: '/auth/onelogin',
-            wechat: '/auth/wechat',
+            wechat: '/auth/wechat', // Legacy support. We can remove this once the `wechat_web` and `wechat_native` deployed
+            wechat_web: '/auth/wechat_web',
+            wechat_native: '/auth/wechat_native',
             wechat_official_account: '/auth/wechat_official_account',
         },
 
