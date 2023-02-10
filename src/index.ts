@@ -261,11 +261,7 @@ const configs: Record<string, Config> = {
         // Default to fetch, but don't assume it's available (e.g., in Jest or when doing SSR)
         httpWrapper: typeof window !== 'undefined' && window.fetch != null ? window.fetch : undefined,
 
-        broadcast(name, payload) {
-            if (process.env.NODE_ENV === 'development') {
-                console.log(`[${name}]:`, payload); // eslint-disable-line no-console
-            }
-        },
+        broadcast(name, payload) {},
 
         navigate(url, replace) {
             if (replace) {
