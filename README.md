@@ -1,8 +1,10 @@
 # Vanilla Token Auth
 
-A decaffeinated de-angularized drop-in replacement for [ng-token-auth](https://github.com/lynndylanhurley/ng-token-auth). Supports cookie transport added in [this `devise_token_auth` PR](https://github.com/lynndylanhurley/devise_token_auth/pull/1453).
+A decaffeinated de-angularized drop-in replacement for [ng-token-auth](https://github.com/lynndylanhurley/ng-token-auth).
 
 `npm i vanilla-token-auth`
+
+Supports most of [the ng-token-auth config](https://github.com/lynndylanhurley/ng-token-auth#complete-config-example), plus a few additional configs for cookie transport (added in [this `devise_token_auth` PR](https://github.com/lynndylanhurley/devise_token_auth/pull/1453)) and wiring into an existing framework's features.
 
 ---
 
