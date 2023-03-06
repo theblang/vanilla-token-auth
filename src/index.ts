@@ -185,6 +185,19 @@ function isObject(value: unknown) {
     return value != null && (type === 'object' || type === 'function')
 }
 
+// See https://github.com/quanticedu/back_royal/pull/10744#issuecomment-1287033565
+// FIXME: if we decide to merge this change, we should add non-standard custom providers
+// (apple_quantic, apple_smartly, wechat_web, wechat_native and wechat_official_account) to DeviseTokenAuthClient instance initialization
+// in front-royal `devise_token_auth_client_module.js` and `devise-token-auth-client.ts` in Gatsby to support apple and wechat login
+export const AuthProviderPathsDefaultConfig = {
+    google_oauth2: '/auth/google_oauth2',
+    facebook: '/auth/facebook',
+    apple: '/auth/apple',
+    twitter: '/auth/twitter',
+    onelogin: '/auth/onelogin',
+    wechat: '/auth/wechat',
+}
+
 const configs: Record<string, Config> = {
     default: {
         apiUrl: '/api',
@@ -247,16 +260,7 @@ const configs: Record<string, Config> = {
             return resp.data;
         },
 
-        authProviderPaths: {
-            google_oauth2: '/auth/google_oauth2',
-            facebook: '/auth/facebook',
-            apple_quantic: '/auth/apple_quantic',
-            apple_smartly: '/auth/apple_smartly',
-            twitter: '/auth/twitter',
-            onelogin: '/auth/onelogin',
-            wechat: '/auth/wechat',
-            wechat_official_account: '/auth/wechat_official_account',
-        },
+        authProviderPaths: AuthProviderPathsDefaultConfig,
 
         // Default to fetch, but don't assume it's available (e.g., in Jest or when doing SSR)
         httpWrapper: typeof window !== 'undefined' && window.fetch != null ? window.fetch : undefined,
